@@ -1,44 +1,24 @@
-const { RSI, MACD, EMA } = require("technicalindicators");
-
 function analyze(candles) {
+    if (!candles || candles.length < 10) {
+        return "NO_SIGNAL";
+    }
 
-    const closes = candles.map(c => c[4]);
+    const last = candles[candles.length - 1];
+    const prev = candles[candles.length - 2];
 
-    const rsi = RSI.calculate({ values: closes, period: 14 });
-    const macd = MACD.calculate({
-        values: closes,
-        fastPeriod: 12,
-        slowPeriod: 26,
-        signalPeriod: 9
-    });
+    const close1 = parseFloat(prev[4]);
+    const close2 = parseFloat(last[4]);
 
-    const ema50 = EMA.calculate({ period: 50, values: closes });
-    const ema200 = EMA.calculate({ period: 200, values: closes });
+    // simple momentum strategy
+    if (close2 > close1) {
+        return "BUY";
+    }
 
-    const lastClose = closes[closes.length - 1];
+    if (close2 < close1) {
+        return "SELL";
+    }
 
-    const trend = ema50[ema50.length - 1] > ema200[ema200.length - 1]
-        ? "UP"
-        : "DOWN";
-
-    const rsiLast = rsi[rsi.length - 1];
-    const macdLast = macd[macd.length - 1];
-
-    let score = 0;
-
-    // RSI
-    if (rsiLast < 35) score++;
-    if (rsiLast > 65) score++;
-
-    // MACD
-    if (macdLast?.MACD > macdLast?.signal) score++;
-    else score++;
-
-    // TREND FILTER
-    if (trend === "UP" && score >= 3) return "BUY";
-    if (trend === "DOWN" && score >= 3) return "SELL";
-
-    return "WAIT";
+    return "NO_SIGNAL";
 }
 
 module.exports = { analyze };
