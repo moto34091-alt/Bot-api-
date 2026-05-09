@@ -7,7 +7,7 @@ const { analyze } = require("./strategy");
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
 // 📢 TON CHANNEL (IMPORTANT)
-const CHANNEL = "https://t.me/binance_trading10"; // ⚠️ change ici
+const CHANNEL = "BINANCE TRADING"; // ⚠️ change ici
 
 let autoTrade = false;
 
@@ -62,7 +62,7 @@ bot.onText(/\/start/, async (msg) => {
 
 Tu dois rejoindre le canal pour utiliser le bot :
 
-👉 https://t.me/${CHANNEL.replace("@", "")}
+👉 https://t.me/binance_trading10("@", "")}
 
 Puis reviens et tape /start`
         );
