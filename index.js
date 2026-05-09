@@ -7,7 +7,7 @@ const { analyze } = require("./strategy");
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
 // 📢 TON CHANNEL (IMPORTANT)
-const CHANNEL = "@TonChannel"; // ⚠️ change ici
+const CHANNEL = "https://t.me/binance_trading10"; // ⚠️ change ici
 
 let autoTrade = false;
 
