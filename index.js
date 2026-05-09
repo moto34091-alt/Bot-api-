@@ -65,7 +65,7 @@ bot.onText(/\/start/, async (msg) => {
 
 Tu dois rejoindre le canal :
 
-👉 https://t.me/${CHANNEL.replace("@", "")}
+👉 https://t.me/binance_trading10
 
 Puis reviens et tape /start`
         );
