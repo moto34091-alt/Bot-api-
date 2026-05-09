@@ -9,8 +9,9 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 // ===============================
 // 👑 CONFIG
 // ===============================
-const OWNER_ID = 5161872804; // 🔁 remplace par TON ID Telegram
-const CHANNEL = "@binance_trading10"; // 🔁 ton vrai channel (IMPORTANT)
+const OWNER_ID = 5161872804; // 👈 ton ID Telegram
+const CHANNEL = "@binance_trading10"; // 👈 ton channel
+const CHANNEL_LINK = "https://t.me/binance_trading10"; // 👈 lien groupe
 
 let autoTrade = false;
 
@@ -63,9 +64,9 @@ bot.onText(/\/start/, async (msg) => {
         return bot.sendMessage(chatId,
 `🚀 ACCÈS BLOQUÉ
 
-Tu dois rejoindre le canal :
+Tu dois rejoindre le canal pour utiliser le bot :
 
-👉 https://t.me/binance_trading10
+👉 ${CHANNEL_LINK}
 
 Puis reviens et tape /start`
         );
@@ -91,9 +92,17 @@ bot.onText(/📊 Signal/, async (msg) => {
 });
 
 // ===============================
-// 🤖 AUTO TRADE
+// 🤖 AUTO TRADE (OWNER ONLY)
 // ===============================
 bot.onText(/🤖 Auto Trade/, (msg) => {
+    const userId = msg.from.id;
+
+    if (userId !== OWNER_ID) {
+        return bot.sendMessage(msg.chat.id,
+            "❌ Seul l'admin peut activer Auto Trade"
+        );
+    }
+
     autoTrade = !autoTrade;
 
     bot.sendMessage(msg.chat.id,
@@ -111,9 +120,14 @@ bot.onText(/💰 Balance/, async (msg) => {
     const member = await isMember(userId);
     if (!member) return;
 
-    const balance = await getBalance();
+    try {
+        const balance = await getBalance();
 
-    bot.sendMessage(chatId, `💰 Balance USDT: ${balance}`);
+        bot.sendMessage(chatId, `💰 Balance USDT: ${balance}`);
+
+    } catch (err) {
+        bot.sendMessage(chatId, "❌ Erreur balance");
+    }
 });
 
 // ===============================
@@ -121,25 +135,36 @@ bot.onText(/💰 Balance/, async (msg) => {
 // ===============================
 bot.onText(/ℹ️ Aide/, (msg) => {
     bot.sendMessage(msg.chat.id,
-`🤖 BOT TRADING
+`🤖 BOT TRADING PRO
 
-- 📊 Analyse marché automatique
-- 🤖 Auto trade ON/OFF
-- ⛔ Stop Loss -1%
-- 🎯 Take Profit +2%
+📊 Signal automatique
+🤖 Auto Trade IA
+⛔ Stop Loss -1%
+🎯 Take Profit +2%
+💎 Multi crypto
 
-⚠️ Trading = risque réel`
+📢 Canal: ${CHANNEL_LINK}
+
+⚠️ Trading = risque`
     );
 });
 
 // ===============================
 // 🔁 AUTO TRADE LOOP
 // ===============================
+let lastTradeTime = 0;
+
 setInterval(async () => {
 
     if (!autoTrade) return;
 
+    const now = Date.now();
+
+    // ⛔ anti spam trades
+    if (now - lastTradeTime < 60000) return;
+
     try {
+
         const candles = await getCandles();
         const signal = analyze(candles);
 
@@ -147,10 +172,12 @@ setInterval(async () => {
 
         if (signal === "BUY") {
             await placeTrade("BUY", price);
+            lastTradeTime = now;
         }
 
         if (signal === "SELL") {
             await placeTrade("SELL", price);
+            lastTradeTime = now;
         }
 
     } catch (err) {
