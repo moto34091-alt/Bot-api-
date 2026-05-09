@@ -1,21 +1,13 @@
-const ccxt = require("ccxt");
-
-const binance = new ccxt.binance({
-    apiKey: process.env.BINANCE_KEY,
-    secret: process.env.BINANCE_SECRET,
-    enableRateLimit: true
-});
-
-async function getBalance() {
+async function getCandles() {
     try {
-        const balance = await binance.fetchBalance();
+        const res = await axios.get(
+            "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=50"
+        );
 
-        return balance.total.USDT || 0;
+        return res.data;
 
     } catch (err) {
-        console.log("BINANCE ERROR:", err.message);
-        throw new Error("Balance fetch failed");
+        console.log("CANDLES ERROR:", err.message);
+        return [];
     }
 }
-
-module.exports = { getBalance };
