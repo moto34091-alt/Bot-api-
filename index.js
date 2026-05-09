@@ -3,60 +3,154 @@ require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const { getCandles, placeTrade, getBalance } = require("./trading");
 const { analyze } = require("./strategy");
-const config = require("./config");
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
+// 📢 TON CHANNEL (IMPORTANT)
+const CHANNEL = "@TonChannel"; // ⚠️ change ici
+
 let autoTrade = false;
 
-// 📌 START MENU
-bot.onText(/\/start/, (msg) => {
-    bot.sendMessage(msg.chat.id,
-`🤖 BOT BINANCE PRO
+// ===============================
+// 🔐 CHECK ABONNEMENT
+// ===============================
+async function isMember(userId) {
+    try {
+        const res = await bot.getChatMember(CHANNEL, userId);
 
-📊 /signal - voir signal
-🤖 Auto Trade ON/OFF
-💰 Balance
-📈 Analyse marché`
+        const status = res.status;
+
+        return (
+            status === "member" ||
+            status === "administrator" ||
+            status === "creator"
+        );
+
+    } catch (err) {
+        console.log("Erreur abonnement:", err.message);
+        return false;
+    }
+}
+
+// ===============================
+// 🟢 MENU PRINCIPAL
+// ===============================
+function menu(chatId) {
+    bot.sendMessage(chatId, "🤖 BOT TRADING PRO", {
+        reply_markup: {
+            keyboard: [
+                ["📊 Signal", "🤖 Auto Trade"],
+                ["💰 Balance", "ℹ️ Aide"]
+            ],
+            resize_keyboard: true
+        }
+    });
+}
+
+// ===============================
+// 🚀 START (AVEC ABONNEMENT)
+// ===============================
+bot.onText(/\/start/, async (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+
+    const member = await isMember(userId);
+
+    if (!member) {
+        return bot.sendMessage(chatId,
+`🚀 ACCÈS BLOQUÉ
+
+Tu dois rejoindre le canal pour utiliser le bot :
+
+👉 https://t.me/${CHANNEL.replace("@", "")}
+
+Puis reviens et tape /start`
+        );
+    }
+
+    menu(chatId);
+});
+
+// ===============================
+// 📊 SIGNAL TRADING
+// ===============================
+bot.onText(/📊 Signal/, async (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+
+    const member = await isMember(userId);
+    if (!member) return;
+
+    const candles = await getCandles();
+    const signal = analyze(candles);
+
+    bot.sendMessage(chatId, `📊 Signal actuel : ${signal}`);
+});
+
+// ===============================
+// 🤖 AUTO TRADE ON/OFF
+// ===============================
+bot.onText(/🤖 Auto Trade/, (msg) => {
+    autoTrade = !autoTrade;
+
+    bot.sendMessage(msg.chat.id,
+        autoTrade ? "🟢 Auto Trade ON" : "🔴 Auto Trade OFF"
     );
 });
 
-// 📊 SIGNAL
-bot.onText(/\/signal/, async (msg) => {
-    const candles = await getCandles();
-    const signal = analyze(candles);
-
-    bot.sendMessage(msg.chat.id, `📊 Signal: ${signal}`);
-});
-
-// 🤖 AUTO TRADE TOGGLE
-bot.onText(/Auto Trade ON|Auto Trade OFF/, (msg) => {
-    autoTrade = !autoTrade;
-    bot.sendMessage(msg.chat.id, autoTrade ? "🟢 AUTO ON" : "🔴 AUTO OFF");
-});
-
+// ===============================
 // 💰 BALANCE
-bot.onText(/\/balance/, async (msg) => {
+// ===============================
+bot.onText(/💰 Balance/, async (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+
+    const member = await isMember(userId);
+    if (!member) return;
+
     const balance = await getBalance();
-    bot.sendMessage(msg.chat.id, `💰 Balance: ${balance} USDT`);
+
+    bot.sendMessage(chatId, `💰 Balance USDT: ${balance}`);
 });
 
-// 🔁 LOOP TRADING
-setInterval(async () => {
+// ===============================
+// ℹ️ AIDE
+// ===============================
+bot.onText(/ℹ️ Aide/, (msg) => {
+    bot.sendMessage(msg.chat.id,
+`🤖 BOT TRADING
 
+- 📊 Analyse marché automatique
+- 🤖 Auto trade
+- ⛔ Stop Loss -1%
+- 🎯 Take Profit +2%
+
+⚠️ Trading = risque réel`
+    );
+});
+
+// ===============================
+// 🔁 AUTO TRADING LOOP
+// ===============================
+setInterval(async () => {
     if (!autoTrade) return;
 
-    const candles = await getCandles();
-    const signal = analyze(candles);
+    try {
+        const candles = await getCandles();
+        const signal = analyze(candles);
 
-    const lastPrice = candles[candles.length - 1][4];
+        const price = candles[candles.length - 1][4];
 
-    if (signal === "BUY") {
-        await placeTrade("BUY", lastPrice);
-    }
+        if (signal === "BUY") {
+            await placeTrade("BUY", price);
+        }
 
-    if (signal === "SELL") {
-        await placeTrade("SELL", lastPrice);
+        if (signal === "SELL") {
+            await placeTrade("SELL", price);
+        }
+
+    } catch (err) {
+        console.log("AutoTrade error:", err.message);
     }
 
 }, 15000);
