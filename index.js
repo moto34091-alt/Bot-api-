@@ -4,29 +4,49 @@ const TelegramBot = require("node-telegram-bot-api");
 const { getCandles, placeTrade, getBalance } = require("./trading");
 const { analyze } = require("./strategy");
 
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+// ===============================
+// 🚀 START LOG + SAFETY
+// ===============================
+console.log("🤖 Bot démarré...");
+
+// STOP si token manquant
+if (!process.env.BOT_TOKEN) {
+    console.error("❌ BOT_TOKEN manquant dans .env");
+    process.exit(1);
+}
+
+// ===============================
+// 🤖 BOT INIT (STABLE RAILWAY)
+// ===============================
+const bot = new TelegramBot(process.env.BOT_TOKEN, {
+    polling: {
+        interval: 1000,
+        autoStart: true,
+        params: {
+            timeout: 10
+        }
+    }
+});
 
 // ===============================
 // 👑 CONFIG
 // ===============================
-const OWNER_ID = 5161872804; // ton ID Telegram
+const OWNER_ID = 5161872804;
 const CHANNEL = "@binance_trading10";
 const CHANNEL_LINK = "https://t.me/binance_trading10";
 
 let autoTrade = false;
+let lastTrade = 0;
 
 // ===============================
 // 🔐 CHECK ABONNEMENT
 // ===============================
 async function isMember(userId) {
-
     if (userId === OWNER_ID) return true;
 
     try {
         const res = await bot.getChatMember(CHANNEL, userId);
-
         return ["member", "administrator", "creator"].includes(res.status);
-
     } catch (err) {
         console.log("Abonnement error:", err.message);
         return false;
@@ -49,48 +69,52 @@ function menu(chatId) {
 }
 
 // ===============================
-// 🚀 START
+// 🚀 START COMMAND
 // ===============================
 bot.onText(/\/start/, async (msg) => {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id;
+    try {
+        const chatId = msg.chat.id;
+        const userId = msg.from.id;
 
-    const member = await isMember(userId);
+        const member = await isMember(userId);
 
-    if (!member) {
-        return bot.sendMessage(chatId,
+        if (!member) {
+            return bot.sendMessage(chatId,
 `🚀 ACCÈS BLOQUÉ
 
-Tu dois rejoindre le canal :
-
-👉 ${CHANNEL_LINK}
+👉 Rejoins le canal :
+${CHANNEL_LINK}
 
 Puis relance /start`
-        );
-    }
+            );
+        }
 
-    menu(chatId);
+        menu(chatId);
+
+    } catch (err) {
+        console.log("START ERROR:", err.message);
+    }
 });
 
 // ===============================
 // 📊 SIGNAL
 // ===============================
 bot.onText(/📊 Signal/, async (msg) => {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id;
-
-    const member = await isMember(userId);
-    if (!member) return;
-
     try {
+        const chatId = msg.chat.id;
+        const userId = msg.from.id;
+
+        const member = await isMember(userId);
+        if (!member) return;
+
         const candles = await getCandles();
         const signal = analyze(candles);
 
         bot.sendMessage(chatId, `📊 Signal : ${signal}`);
 
     } catch (err) {
-        console.log(err.message);
-        bot.sendMessage(chatId, "❌ Erreur signal");
+        console.log("SIGNAL ERROR:", err.message);
+        bot.sendMessage(msg.chat.id, "❌ Erreur signal");
     }
 });
 
@@ -101,9 +125,7 @@ bot.onText(/🤖 Auto Trade/, (msg) => {
     const userId = msg.from.id;
 
     if (userId !== OWNER_ID) {
-        return bot.sendMessage(msg.chat.id,
-            "❌ Seul l'admin peut activer Auto Trade"
-        );
+        return bot.sendMessage(msg.chat.id, "❌ Admin uniquement");
     }
 
     autoTrade = !autoTrade;
@@ -114,16 +136,16 @@ bot.onText(/🤖 Auto Trade/, (msg) => {
 });
 
 // ===============================
-// 💰 BALANCE (FIX SANS ERREUR)
+// 💰 BALANCE
 // ===============================
 bot.onText(/💰 Balance/, async (msg) => {
-    const chatId = msg.chat.id;
-    const userId = msg.from.id;
-
-    const member = await isMember(userId);
-    if (!member) return;
-
     try {
+        const chatId = msg.chat.id;
+        const userId = msg.from.id;
+
+        const member = await isMember(userId);
+        if (!member) return;
+
         const balance = await getBalance();
 
         if (!balance) {
@@ -134,10 +156,7 @@ bot.onText(/💰 Balance/, async (msg) => {
 
     } catch (err) {
         console.log("BALANCE ERROR:", err.message);
-
-        bot.sendMessage(chatId,
-            "❌ Impossible de récupérer la balance Binance"
-        );
+        bot.sendMessage(msg.chat.id, "❌ Erreur balance Binance");
     }
 });
 
@@ -148,32 +167,29 @@ bot.onText(/ℹ️ Aide/, (msg) => {
     bot.sendMessage(msg.chat.id,
 `🤖 BOT TRADING PRO
 
-📊 Signal automatique
+📊 Signal
 🤖 Auto Trade
-💰 Balance Binance
+💰 Balance
 ⛔ SL -1%
 🎯 TP +2%
 
-📢 Canal: ${CHANNEL_LINK}
+📢 Canal:
+${CHANNEL_LINK}
 
 ⚠️ Trading = risque`
     );
 });
 
 // ===============================
-// 🔁 AUTO TRADE LOOP
+// 🔁 AUTO TRADE LOOP SAFE
 // ===============================
-let lastTrade = 0;
-
 setInterval(async () => {
-
-    if (!autoTrade) return;
-
-    const now = Date.now();
-
-    if (now - lastTrade < 60000) return;
-
     try {
+        if (!autoTrade) return;
+
+        const now = Date.now();
+        if (now - lastTrade < 60000) return;
+
         const candles = await getCandles();
         const signal = analyze(candles);
 
@@ -190,7 +206,7 @@ setInterval(async () => {
         }
 
     } catch (err) {
-        console.log("AutoTrade error:", err.message);
+        console.log("AUTO TRADE ERROR:", err.message);
     }
 
 }, 15000);
