@@ -9,9 +9,9 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 // ===============================
 // 👑 CONFIG
 // ===============================
-const OWNER_ID = 5161872804; // 👈 ton ID Telegram
-const CHANNEL = "@binance_trading10"; // 👈 ton channel
-const CHANNEL_LINK = "https://t.me/binance_trading10"; // 👈 lien groupe
+const OWNER_ID = 5161872804; // ton ID Telegram
+const CHANNEL = "@binance_trading10";
+const CHANNEL_LINK = "https://t.me/binance_trading10";
 
 let autoTrade = false;
 
@@ -20,10 +20,7 @@ let autoTrade = false;
 // ===============================
 async function isMember(userId) {
 
-    // 👑 OWNER BYPASS
-    if (userId === OWNER_ID) {
-        return true;
-    }
+    if (userId === OWNER_ID) return true;
 
     try {
         const res = await bot.getChatMember(CHANNEL, userId);
@@ -31,7 +28,7 @@ async function isMember(userId) {
         return ["member", "administrator", "creator"].includes(res.status);
 
     } catch (err) {
-        console.log("Erreur abonnement:", err.message);
+        console.log("Abonnement error:", err.message);
         return false;
     }
 }
@@ -64,11 +61,11 @@ bot.onText(/\/start/, async (msg) => {
         return bot.sendMessage(chatId,
 `🚀 ACCÈS BLOQUÉ
 
-Tu dois rejoindre le canal pour utiliser le bot :
+Tu dois rejoindre le canal :
 
 👉 ${CHANNEL_LINK}
 
-Puis reviens et tape /start`
+Puis relance /start`
         );
     }
 
@@ -85,10 +82,16 @@ bot.onText(/📊 Signal/, async (msg) => {
     const member = await isMember(userId);
     if (!member) return;
 
-    const candles = await getCandles();
-    const signal = analyze(candles);
+    try {
+        const candles = await getCandles();
+        const signal = analyze(candles);
 
-    bot.sendMessage(chatId, `📊 Signal actuel : ${signal}`);
+        bot.sendMessage(chatId, `📊 Signal : ${signal}`);
+
+    } catch (err) {
+        console.log(err.message);
+        bot.sendMessage(chatId, "❌ Erreur signal");
+    }
 });
 
 // ===============================
@@ -111,7 +114,7 @@ bot.onText(/🤖 Auto Trade/, (msg) => {
 });
 
 // ===============================
-// 💰 BALANCE
+// 💰 BALANCE (FIX SANS ERREUR)
 // ===============================
 bot.onText(/💰 Balance/, async (msg) => {
     const chatId = msg.chat.id;
@@ -123,10 +126,18 @@ bot.onText(/💰 Balance/, async (msg) => {
     try {
         const balance = await getBalance();
 
+        if (!balance) {
+            return bot.sendMessage(chatId, "⚠️ Balance indisponible");
+        }
+
         bot.sendMessage(chatId, `💰 Balance USDT: ${balance}`);
 
     } catch (err) {
-        bot.sendMessage(chatId, "❌ Erreur balance");
+        console.log("BALANCE ERROR:", err.message);
+
+        bot.sendMessage(chatId,
+            "❌ Impossible de récupérer la balance Binance"
+        );
     }
 });
 
@@ -138,10 +149,10 @@ bot.onText(/ℹ️ Aide/, (msg) => {
 `🤖 BOT TRADING PRO
 
 📊 Signal automatique
-🤖 Auto Trade IA
-⛔ Stop Loss -1%
-🎯 Take Profit +2%
-💎 Multi crypto
+🤖 Auto Trade
+💰 Balance Binance
+⛔ SL -1%
+🎯 TP +2%
 
 📢 Canal: ${CHANNEL_LINK}
 
@@ -152,7 +163,7 @@ bot.onText(/ℹ️ Aide/, (msg) => {
 // ===============================
 // 🔁 AUTO TRADE LOOP
 // ===============================
-let lastTradeTime = 0;
+let lastTrade = 0;
 
 setInterval(async () => {
 
@@ -160,11 +171,9 @@ setInterval(async () => {
 
     const now = Date.now();
 
-    // ⛔ anti spam trades
-    if (now - lastTradeTime < 60000) return;
+    if (now - lastTrade < 60000) return;
 
     try {
-
         const candles = await getCandles();
         const signal = analyze(candles);
 
@@ -172,12 +181,12 @@ setInterval(async () => {
 
         if (signal === "BUY") {
             await placeTrade("BUY", price);
-            lastTradeTime = now;
+            lastTrade = now;
         }
 
         if (signal === "SELL") {
             await placeTrade("SELL", price);
-            lastTradeTime = now;
+            lastTrade = now;
         }
 
     } catch (err) {
