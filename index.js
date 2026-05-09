@@ -6,8 +6,11 @@ const { analyze } = require("./strategy");
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
-// 📢 TON CHANNEL (IMPORTANT)
-const CHANNEL = "BINANCE TRADING"; // ⚠️ change ici
+// ===============================
+// 👑 CONFIG
+// ===============================
+const OWNER_ID = 5161872804; // 🔁 remplace par TON ID Telegram
+const CHANNEL = "@binance_trading10"; // 🔁 ton vrai channel (IMPORTANT)
 
 let autoTrade = false;
 
@@ -15,16 +18,16 @@ let autoTrade = false;
 // 🔐 CHECK ABONNEMENT
 // ===============================
 async function isMember(userId) {
+
+    // 👑 OWNER BYPASS
+    if (userId === OWNER_ID) {
+        return true;
+    }
+
     try {
         const res = await bot.getChatMember(CHANNEL, userId);
 
-        const status = res.status;
-
-        return (
-            status === "member" ||
-            status === "administrator" ||
-            status === "creator"
-        );
+        return ["member", "administrator", "creator"].includes(res.status);
 
     } catch (err) {
         console.log("Erreur abonnement:", err.message);
@@ -33,7 +36,7 @@ async function isMember(userId) {
 }
 
 // ===============================
-// 🟢 MENU PRINCIPAL
+// 🟢 MENU
 // ===============================
 function menu(chatId) {
     bot.sendMessage(chatId, "🤖 BOT TRADING PRO", {
@@ -48,7 +51,7 @@ function menu(chatId) {
 }
 
 // ===============================
-// 🚀 START (AVEC ABONNEMENT)
+// 🚀 START
 // ===============================
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
@@ -60,9 +63,9 @@ bot.onText(/\/start/, async (msg) => {
         return bot.sendMessage(chatId,
 `🚀 ACCÈS BLOQUÉ
 
-Tu dois rejoindre le canal pour utiliser le bot :
+Tu dois rejoindre le canal :
 
-👉 https://t.me/binance_trading10("@", "")}
+👉 https://t.me/${CHANNEL.replace("@", "")}
 
 Puis reviens et tape /start`
         );
@@ -72,7 +75,7 @@ Puis reviens et tape /start`
 });
 
 // ===============================
-// 📊 SIGNAL TRADING
+// 📊 SIGNAL
 // ===============================
 bot.onText(/📊 Signal/, async (msg) => {
     const chatId = msg.chat.id;
@@ -88,7 +91,7 @@ bot.onText(/📊 Signal/, async (msg) => {
 });
 
 // ===============================
-// 🤖 AUTO TRADE ON/OFF
+// 🤖 AUTO TRADE
 // ===============================
 bot.onText(/🤖 Auto Trade/, (msg) => {
     autoTrade = !autoTrade;
@@ -121,7 +124,7 @@ bot.onText(/ℹ️ Aide/, (msg) => {
 `🤖 BOT TRADING
 
 - 📊 Analyse marché automatique
-- 🤖 Auto trade
+- 🤖 Auto trade ON/OFF
 - ⛔ Stop Loss -1%
 - 🎯 Take Profit +2%
 
@@ -130,9 +133,10 @@ bot.onText(/ℹ️ Aide/, (msg) => {
 });
 
 // ===============================
-// 🔁 AUTO TRADING LOOP
+// 🔁 AUTO TRADE LOOP
 // ===============================
 setInterval(async () => {
+
     if (!autoTrade) return;
 
     try {
