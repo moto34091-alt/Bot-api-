@@ -9,14 +9,13 @@ const { analyze } = require("./strategy");
 // ===============================
 console.log("🤖 Bot démarré...");
 
-// STOP si token manquant
 if (!process.env.BOT_TOKEN) {
     console.error("❌ BOT_TOKEN manquant dans .env");
     process.exit(1);
 }
 
 // ===============================
-// 🤖 BOT INIT (STABLE RAILWAY)
+// 🤖 BOT INIT
 // ===============================
 const bot = new TelegramBot(process.env.BOT_TOKEN, {
     polling: {
@@ -61,7 +60,8 @@ function menu(chatId) {
         reply_markup: {
             keyboard: [
                 ["📊 Signal", "🤖 Auto Trade"],
-                ["💰 Balance", "ℹ️ Aide"]
+                ["💰 Balance", "📡 Live"],
+                ["ℹ️ Aide"]
             ],
             resize_keyboard: true
         }
@@ -69,7 +69,7 @@ function menu(chatId) {
 }
 
 // ===============================
-// 🚀 START COMMAND
+// 🚀 START
 // ===============================
 bot.onText(/\/start/, async (msg) => {
     try {
@@ -102,10 +102,6 @@ Puis relance /start`
 bot.onText(/📊 Signal/, async (msg) => {
     try {
         const chatId = msg.chat.id;
-        const userId = msg.from.id;
-
-        const member = await isMember(userId);
-        if (!member) return;
 
         const candles = await getCandles();
         const signal = analyze(candles);
@@ -119,12 +115,10 @@ bot.onText(/📊 Signal/, async (msg) => {
 });
 
 // ===============================
-// 🤖 AUTO TRADE (OWNER ONLY)
+// 🤖 AUTO TRADE
 // ===============================
 bot.onText(/🤖 Auto Trade/, (msg) => {
-    const userId = msg.from.id;
-
-    if (userId !== OWNER_ID) {
+    if (msg.from.id !== OWNER_ID) {
         return bot.sendMessage(msg.chat.id, "❌ Admin uniquement");
     }
 
@@ -140,23 +134,16 @@ bot.onText(/🤖 Auto Trade/, (msg) => {
 // ===============================
 bot.onText(/💰 Balance/, async (msg) => {
     try {
-        const chatId = msg.chat.id;
-        const userId = msg.from.id;
-
-        const member = await isMember(userId);
-        if (!member) return;
-
         const balance = await getBalance();
 
         if (!balance) {
-            return bot.sendMessage(chatId, "⚠️ Balance indisponible");
+            return bot.sendMessage(msg.chat.id, "⚠️ Balance indisponible");
         }
 
-        bot.sendMessage(chatId, `💰 Balance USDT: ${balance}`);
+        bot.sendMessage(msg.chat.id, `💰 Balance USDT: ${balance}`);
 
     } catch (err) {
         console.log("BALANCE ERROR:", err.message);
-        bot.sendMessage(msg.chat.id, "❌ Erreur balance Binance");
     }
 });
 
@@ -170,43 +157,87 @@ bot.onText(/ℹ️ Aide/, (msg) => {
 📊 Signal
 🤖 Auto Trade
 💰 Balance
-⛔ SL -1%
-🎯 TP +2%
-
-📢 Canal:
-${CHANNEL_LINK}
+📡 Live
 
 ⚠️ Trading = risque`
     );
 });
 
 // ===============================
-// 🔁 AUTO TRADE LOOP SAFE
+// 📡 LIVE DASHBOARD
 // ===============================
-setInterval(async () => {
-    try {
-        if (!autoTrade) return;
+let liveInterval = null;
+let liveMessageId = null;
 
-        const now = Date.now();
-        if (now - lastTrade < 60000) return;
+bot.onText(/📡 Live/, async (msg) => {
+    const chatId = msg.chat.id;
 
-        const candles = await getCandles();
-        const signal = analyze(candles);
+    const message = await bot.sendMessage(chatId, "📡 Initialisation live...");
+    liveMessageId = message.message_id;
 
-        const price = candles[candles.length - 1][4];
+    if (liveInterval) clearInterval(liveInterval);
 
-        if (signal === "BUY") {
-            await placeTrade("BUY", price);
-            lastTrade = now;
+    liveInterval = setInterval(async () => {
+        try {
+            const candles = await getCandles();
+            const signal = analyze(candles);
+
+            const lastPrice = candles?.[candles.length - 1]?.[4] || 0;
+            const prevPrice = candles?.[candles.length - 2]?.[4] || 0;
+
+            const trend = lastPrice > prevPrice ? "📈 UP" : "📉 DOWN";
+
+            const balance = await getBalance();
+
+            const chart = generateMiniChart(candles);
+
+            const text = `
+📊 LIVE BINANCE BOT
+
+💰 BTC/USDT: ${lastPrice}
+📈 Signal: ${signal}
+📊 Trend: ${trend}
+
+🕯️ ${chart}
+
+💵 Balance: ${balance || "N/A"}
+
+⏱️ ${new Date().toLocaleTimeString()}
+            `;
+
+            await bot.editMessageText(text, {
+                chat_id: chatId,
+                message_id: liveMessageId
+            });
+
+        } catch (err) {
+            console.log("LIVE ERROR:", err.message);
         }
+    }, 7000);
+});
 
-        if (signal === "SELL") {
-            await placeTrade("SELL", price);
-            lastTrade = now;
-        }
+// ===============================
+// 📈 MINI CHART
+// ===============================
+function generateMiniChart(candles) {
+    if (!candles || candles.length < 10) return "[no data]";
 
-    } catch (err) {
-        console.log("AUTO TRADE ERROR:", err.message);
+    const closes = candles.slice(-10).map(c => Number(c[4]));
+
+    const max = Math.max(...closes);
+    const min = Math.min(...closes);
+
+    let chart = "";
+
+    for (let price of closes) {
+        const n = (price - min) / (max - min + 0.0001);
+
+        if (n > 0.8) chart += "█";
+        else if (n > 0.6) chart += "▆";
+        else if (n > 0.4) chart += "▄";
+        else if (n > 0.2) chart += "▂";
+        else chart += "▁";
     }
 
-}, 15000);
+    return chart;
+}
