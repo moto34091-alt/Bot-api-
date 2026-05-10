@@ -15,9 +15,16 @@ function sign(query) {
 
 async function getBalance() {
     try {
+
+        if (!API_KEY || !API_SECRET) {
+            console.log("❌ Binance keys manquantes");
+            return null;
+        }
+
         const timestamp = Date.now();
 
-        const query = `timestamp=${timestamp}`;
+        const query = `timestamp=${timestamp}&recvWindow=5000`;
+
         const signature = sign(query);
 
         const url = `${BASE_URL}/api/v3/account?${query}&signature=${signature}`;
@@ -33,7 +40,10 @@ async function getBalance() {
         return usdt ? parseFloat(usdt.free).toFixed(2) : 0;
 
     } catch (err) {
-        console.log("BINANCE BALANCE ERROR:", err.response?.data || err.message);
+        console.log(
+            "BINANCE BALANCE ERROR:",
+            err.response?.data || err.message
+        );
         return null;
     }
 }
