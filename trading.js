@@ -1,3 +1,6 @@
+const axios = require("axios");
+const crypto = require("crypto");
+
 async function getBalance() {
     try {
         if (!process.env.BINANCE_API_KEY || !process.env.BINANCE_API_SECRET) {
@@ -30,3 +33,5 @@ async function getBalance() {
         return null;
     }
 }
+
+module.exports = { getBalance };
