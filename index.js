@@ -5,7 +5,7 @@ const { getCandles, placeTrade, getBalance } = require("./trading");
 const { analyze } = require("./strategy");
 
 // ===============================
-// 🚀 START LOG + SAFETY
+// 🚀 START
 // ===============================
 console.log("🤖 Bot démarré...");
 
@@ -21,9 +21,7 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, {
     polling: {
         interval: 1000,
         autoStart: true,
-        params: {
-            timeout: 10
-        }
+        params: { timeout: 10 }
     }
 });
 
@@ -82,10 +80,10 @@ bot.onText(/\/start/, async (msg) => {
             return bot.sendMessage(chatId,
 `🚀 ACCÈS BLOQUÉ
 
-👉 Rejoins le canal :
+👉 Rejoins :
 ${CHANNEL_LINK}
 
-Puis relance /start`
+Puis /start`
             );
         }
 
@@ -101,12 +99,15 @@ Puis relance /start`
 // ===============================
 bot.onText(/📊 Signal/, async (msg) => {
     try {
-        const chatId = msg.chat.id;
-
         const candles = await getCandles();
+
+        if (!candles || candles.length < 10) {
+            return bot.sendMessage(msg.chat.id, "⚠️ Pas assez de données");
+        }
+
         const signal = analyze(candles);
 
-        bot.sendMessage(chatId, `📊 Signal : ${signal}`);
+        bot.sendMessage(msg.chat.id, `📊 Signal : ${signal}`);
 
     } catch (err) {
         console.log("SIGNAL ERROR:", err.message);
@@ -136,7 +137,7 @@ bot.onText(/💰 Balance/, async (msg) => {
     try {
         const balance = await getBalance();
 
-        if (!balance) {
+        if (balance === null) {
             return bot.sendMessage(msg.chat.id, "⚠️ Balance indisponible");
         }
 
@@ -157,14 +158,12 @@ bot.onText(/ℹ️ Aide/, (msg) => {
 📊 Signal
 🤖 Auto Trade
 💰 Balance
-📡 Live
-
-⚠️ Trading = risque`
+📡 Live`
     );
 });
 
 // ===============================
-// 📡 LIVE DASHBOARD
+// 📡 LIVE DASHBOARD (FIX STABLE)
 // ===============================
 let liveInterval = null;
 let liveMessageId = null;
@@ -180,10 +179,16 @@ bot.onText(/📡 Live/, async (msg) => {
     liveInterval = setInterval(async () => {
         try {
             const candles = await getCandles();
-            const signal = analyze(candles);
 
-            const lastPrice = candles?.[candles.length - 1]?.[4] || 0;
-            const prevPrice = candles?.[candles.length - 2]?.[4] || 0;
+            if (!candles || candles.length < 5) {
+                console.log("❌ Candles invalides");
+                return;
+            }
+
+            const signal = analyze(candles) || "NO_SIGNAL";
+
+            const lastPrice = Number(candles[candles.length - 1][4]);
+            const prevPrice = Number(candles[candles.length - 2][4]);
 
             const trend = lastPrice > prevPrice ? "📈 UP" : "📉 DOWN";
 
@@ -200,7 +205,7 @@ bot.onText(/📡 Live/, async (msg) => {
 
 🕯️ ${chart}
 
-💵 Balance: ${balance || "N/A"}
+💵 Balance: ${balance ?? "N/A"}
 
 ⏱️ ${new Date().toLocaleTimeString()}
             `;
